@@ -1,0 +1,3 @@
+[submodule "lionideaton"]
+	path = lionideaton
+	url = https://github.com/heychaewong/lionideaton.git
