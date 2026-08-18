@@ -6,10 +6,12 @@
 
 ## 0. 전제
 
-- DB는 이미 가비아 DB호스팅(MySQL)에 떠 있고 `.env`의 `DATABASE_URL`이 로컬에서 검증됐다고 가정.
+- 배포 구조: Vercel(프론트) → 가비아(이 문서 — FastAPI 백엔드 호스팅) → Supabase(DB+Auth).
+  DB는 가비아가 아니라 **Supabase Postgres**에 있다 — 가비아는 이 앱을 실행만 한다.
+- DB는 이미 Supabase 프로젝트에 떠 있고 `.env`의 `DATABASE_URL`이 로컬에서 검증됐다고 가정.
   (아직이면 이 문서보다 로컬 `alembic upgrade head` + `python scripts/seed.py`가 먼저.)
-- 이 배포는 "가비아 클라우드(g클라우드)" — DB호스팅과는 다른 별도 상품. 가상서버(VM)를
-  새로 만들어야 한다.
+- 이 배포는 "가비아 클라우드(g클라우드)" — 가상서버(VM) 상품이다. 앱만 여기서 돌리고
+  DB 접속은 그 VM에서 인터넷 너머 Supabase로 나간다.
 
 ## 1. VM 준비
 
@@ -35,7 +37,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
-nano .env   # DATABASE_URL(가비아 MySQL), SUPABASE_URL/SUPABASE_JWT_SECRET, OPENAI_API_KEY,
+nano .env   # DATABASE_URL(Supabase Postgres), SUPABASE_URL/SUPABASE_JWT_SECRET, OPENAI_API_KEY,
             # APP_ENV=production 채우기
 ```
 

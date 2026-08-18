@@ -25,6 +25,21 @@ GOOD_ZINC_MG = 2.0
 
 RECENT_WINDOW_DAYS = 7
 
+_THRESHOLDS = {"OMEGA3": GOOD_OMEGA3_MG, "VIT_C": GOOD_VIT_C_MG, "VIT_E": GOOD_VIT_E_MG, "ZINC": GOOD_ZINC_MG}
+
+
+def deficiency_ratio(code: str, average: float | None) -> float | None:
+    """평균 섭취량 / 권장량. GET /analysis/diet의 deficiencies[].ratio와
+    GET /recommendations/ingredients의 그룹 정렬(부족이 심한 순)이 공유해서 씀."""
+    if average is None:
+        return None
+    return round(average / _THRESHOLDS[code], 4)
+
+# Android SkinScoreCalculator.scoreForItem/scoreForMeals와 동일하게 유지할 것 (값이 바뀌면
+# 프론트 팀에도 알릴 것). API 명세서 v2의 GET /analysis/diet의 score.total이 이걸 씀 —
+# 지금까지는 결핍 분석(analyze_deficiency)만 포팅돼 있고 점수 자체는 없었음.
+BASE_SCORE = 70
+
 
 @dataclass
 class NutrientAverage:
@@ -102,3 +117,42 @@ def analyze_deficiency(meal_logs: list[MealLog]) -> DeficiencySummary:
     if summary.zinc_deficient:
         summary.deficient_keys.append("ZINC")
     return summary
+
+
+def score_for_item(food: Food, portion_ratio: float) -> int:
+    """Android SkinScoreCalculator.scoreForItem 그대로 포팅. NULL 영양소는 결측 취급(가점/감점
+    없음) — 값이 있을 때만 채점하는 원칙(공통 지침 2.4)은 analyze_deficiency와 동일."""
+    score = BASE_SCORE
+
+    if food.sugar_g * portion_ratio >= HIGH_SUGAR_G:
+        score -= 10
+    if food.is_high_gi:
+        score -= 5
+    if food.sat_fat_g is not None and food.sat_fat_g * portion_ratio >= HIGH_SAT_FAT_G:
+        score -= 5
+    if food.omega3_mg is not None and food.omega3_mg * portion_ratio >= GOOD_OMEGA3_MG:
+        score += 10
+    if food.vit_c_mg is not None and food.vit_c_mg * portion_ratio >= GOOD_VIT_C_MG:
+        score += 5
+    if food.vit_e_mg is not None and food.vit_e_mg * portion_ratio >= GOOD_VIT_E_MG:
+        score += 5
+    if food.zinc_mg is not None and food.zinc_mg * portion_ratio >= GOOD_ZINC_MG:
+        score += 5
+
+    return max(0, min(100, score))
+
+
+def score_for_meals(meal_logs: list[MealLog]) -> int:
+    """Android SkinScoreCalculator.scoreForMeals 포팅 — 끼니 없으면 BASE_SCORE, 있으면
+    아이템별 점수 평균(반올림)."""
+    items = [item for log in meal_logs for item in log.items]
+    if not items:
+        return BASE_SCORE
+    scores = [score_for_item(item.food, item.portion_ratio) for item in items]
+    return max(0, min(100, round(sum(scores) / len(scores))))
+
+
+def logged_days(meal_logs: list[MealLog]) -> int:
+    """최근 구간 안에서 실제로 기록이 있었던 날짜 수 — GET /analysis/diet의
+    hasEnoughData(loggedDays>=3) 판단에 씀."""
+    return len({log.eaten_at.date() for log in meal_logs})

@@ -25,6 +25,12 @@ from app.services.skin_score import analyze_deficiency
 # `@POST("ai/food-image")`로 이미 하드고딩돼 있어서(프론트 폴더는 건드리지 않기로 함),
 # 경로를 `/ai/food-image`로 정확히 맞춰야 함. 다른 라우터들처럼 prefix를 붙이고 싶으면
 # 반드시 프론트 팀과 먼저 맞출 것.
+#
+# 그래서 이 라우터에는 다른 라우터들과 달리 route_class=EnvelopeRoute를 아직 안 붙였다 —
+# 붙이면 응답이 {candidates:[...]}에서 {success,data:{candidates:[...]},error:null}로
+# 바뀌어서 안드로이드가 이미 하드코딩한 FoodImageAnalysisResponse 파싱이 깨진다.
+# API 명세서 v2는 이 엔드포인트를 POST /meals/analyze-photo로 옮기는 걸 전제로 하는데,
+# 그 마이그레이션(경로+응답 shape+프론트 코드) 하기 전까지는 지금 계약을 그대로 유지한다.
 router = APIRouter(prefix="/ai", tags=["ai"])
 
 MAX_CANDIDATES = 50

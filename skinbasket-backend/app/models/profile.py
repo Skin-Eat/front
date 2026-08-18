@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, Enum, ForeignKey, String, Uuid, func
+from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, String, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -15,8 +15,11 @@ class SkinType(str, enum.Enum):
 
 
 class ConstraintType(str, enum.Enum):
-    ALLERGY = "ALLERGY"
-    DISLIKE = "DISLIKE"
+    # 값(=JSON에 나가는 문자열)만 API 명세서 v2에 맞춰 소문자로 — 멤버 이름은 그대로라
+    # 코드에서 ConstraintType.ALLERGY로 쓰는 곳은 안 바뀌어도 됨. SQLAlchemy Enum은 DB에
+    # 멤버 "이름"(ALLERGY/DISLIKE)을 저장하므로 이 값 변경은 DB 마이그레이션도 필요 없음.
+    ALLERGY = "allergy"
+    DISLIKE = "dislike"
 
 
 class Profile(Base):
@@ -33,6 +36,8 @@ class Profile(Base):
     nickname: Mapped[str] = mapped_column(String(50))
     skin_type: Mapped[SkinType | None] = mapped_column(Enum(SkinType, name="skin_type"), nullable=True)
     concerns: Mapped[list[str]] = mapped_column(JSON, default=list)
+    # 얼굴/피부 사진 수집·저장 동의 여부. false면 skin_log.photo_url 없이 수치만 기록 (API 명세서 v2).
+    photo_consent: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     constraints: Mapped[list["UserConstraint"]] = relationship(back_populates="profile", cascade="all, delete-orphan")

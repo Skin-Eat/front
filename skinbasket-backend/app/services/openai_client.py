@@ -12,10 +12,14 @@
 키가 없거나 호출이 실패하면 예외를 던진다 — 프론트는 이미 실패 시 "다시 시도" UI가
 있으므로(FoodLogScreen의 AiFoodErrorCard), 여기서 억지로 빈 성공 응답을 만들 필요 없음.
 ②③도 일단 같은 원칙(실패 -> 예외 -> 라우터에서 502)으로 맞춰뒀다.
+
+모델/프롬프트/재시도 정책은 AI 담당자가 실제 사진 24장으로 돌려본 검증 결과
+(Skin-Eat/ai 레포 BRIEFING.md, 2026-08-18, v2 프롬프트 기준 23/24=95.8%)를 반영한 것.
 """
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import re
@@ -25,9 +29,12 @@ import httpx
 from app.core.config import get_settings
 from app.services.skin_score import DeficiencySummary
 
-# gpt-4o-mini: 비전(이미지 입력) 지원 + 저비용 — 세 기능 다 무거운 추론이 필요하지 않아서 선택.
-OPENAI_MODEL = "gpt-4o-mini"
+# gpt-4.1-mini: 원래 gpt-4o-mini로 시작했으나, AI 담당자 검증 중 gpt-4o-mini가 당일 RPD(일일 요청
+# 한도)에 걸려 gpt-4.1-mini로 교체 후 재검증함(23/24=95.8%, food_recognition_v2 프롬프트 기준).
+# 우리 계정도 같은 한도에 걸릴 수 있으므로 이 모델명을 그대로 따른다.
+OPENAI_MODEL = "gpt-4.1-mini"
 OPENAI_ENDPOINT = "https://api.openai.com/v1/chat/completions"
+_MAX_ATTEMPTS = 3
 
 NUTRIENT_LABELS = {
     "OMEGA3": "오메가3",
@@ -56,22 +63,36 @@ class RecipeGenerationError(OpenAIError):
 
 async def _call_openai(content: list[dict], error_cls: type[OpenAIError]) -> str:
     """세 기능이 공유하는 OpenAI Chat Completions 호출 뼈대.
-    content는 OpenAI의 멀티모달 content 배열 형식 — [{"type": "text", "text": ...}, ...]."""
+    content는 OpenAI의 멀티모달 content 배열 형식 — [{"type": "text", "text": ...}, ...].
+
+    429(rate limit)는 최대 _MAX_ATTEMPTS번까지 재시도한다 — free/저티어 계정은 분당 요청 수
+    제한이 빡빡해서(AI 담당자 검증 시 RPM=10) 한 번의 스파이크로도 흔히 걸림. 단, 에러 메시지에
+    "requests per day"(일일 한도)가 보이면 기다려도 소용없으므로 바로 실패시킨다.
+    """
     settings = get_settings()
     if not settings.openai_api_key:
         raise error_cls("OPENAI_API_KEY가 설정되지 않았습니다.")
 
     payload = {
         "model": OPENAI_MODEL,
+        "temperature": 0,  # 인식/JSON 추출 위주라 낮은 온도가 일관성에 유리함
         "messages": [{"role": "user", "content": content}],
     }
     headers = {"Authorization": f"Bearer {settings.openai_api_key}"}
 
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        response = await client.post(OPENAI_ENDPOINT, headers=headers, json=payload)
+    response: httpx.Response | None = None
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        for attempt in range(1, _MAX_ATTEMPTS + 1):
+            response = await client.post(OPENAI_ENDPOINT, headers=headers, json=payload)
+            if response.status_code == 200:
+                break
 
-    if response.status_code != 200:
-        raise error_cls(f"OpenAI 호출 실패: {response.status_code} {response.text}")
+            is_daily_limit = "requests per day" in response.text.lower()
+            if response.status_code == 429 and attempt < _MAX_ATTEMPTS and not is_daily_limit:
+                wait_s = float(response.headers.get("retry-after", 2 * attempt))
+                await asyncio.sleep(wait_s)
+                continue
+            raise error_cls(f"OpenAI 호출 실패: {response.status_code} {response.text}")
 
     data = response.json()
     try:
@@ -90,7 +111,16 @@ def _build_food_prompt(candidates: list[str]) -> str:
         "사진과 가장 비슷한 순서로 최대 3개를 고르세요.\n"
         f"후보 목록: [{candidate_list}]\n"
         "반드시 후보 목록에 있는 문자열 그대로, JSON 배열 하나만 출력하세요. "
-        '예: ["마라탕", "짬뽕"]  다른 설명은 출력하지 마세요.'
+        '예: ["마라탕", "짬뽕"]  다른 설명은 출력하지 마세요.\n\n'
+        # 아래 구분 힌트는 AI 담당자가 v1(구분 힌트 없음) 대비 v2로 정확도를 올린 부분을 그대로
+        # 옮긴 것 — 헷갈리기 쉬운 후보끼리 붙어있을 때만 참고하고, 후보에 없으면 무시할 것.
+        "헷갈리기 쉬운 후보 구분 힌트:\n"
+        "- 찌개·국: 김치찌개(빨간 김치 국물, 김치 조각 뚜렷) / 된장찌개(탁한 갈색·황토색 국물) / "
+        "순두부찌개(흰 순두부가 크게 보임) / 부대찌개(햄·소시지·라면사리 등 가공육)\n"
+        "- 면·밥: 짜장면(검은 춘장 소스) / 짬뽕(빨간 해물 국물 면) / 냉면(찬 육수·비빔, 금속 그릇 많음) / "
+        "비빔밥(밥 위에 나물·계란 등을 올린 형태) / 김치볶음밥(국물 없는 볶음 알갱이)\n"
+        "- 고기: 불고기(얇게 썬 양념 소고기 볶음) / 제육볶음(매콤한 돼지고기 볶음) / "
+        "삼겹살구이(구운 삼겹살 슬라이스) / 보쌈·족발(수육·편육 형태)"
     )
 
 

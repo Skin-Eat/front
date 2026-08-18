@@ -1,41 +1,94 @@
 import uuid
 
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session, joinedload
 
+from app.core.envelope import EnvelopeRoute
 from app.core.security import get_current_profile_id
 from app.db.session import get_db
+from app.models.basket_item import BasketItem
 from app.models.ingredient import Ingredient
-from app.schemas.basket import BasketRecommendationOut, RecommendationGroupOut
-from app.services.meal_query import get_recent_meal_logs
-from app.services.skin_score import analyze_deficiency
+from app.schemas.basket import BasketItemIn, BasketItemOut, BasketItemUpdate
 
-ALL_KEYS = ["OMEGA3", "VIT_C", "VIT_E", "ZINC"]
+router = APIRouter(prefix="/basket", tags=["basket"], route_class=EnvelopeRoute)
 
-router = APIRouter(prefix="/basket", tags=["basket"])
+# API 명세서 v2: 추천 계산(어떤 재료를 담을지)은 GET /recommendations/ingredients로 옮김
+# (routers/recommendations.py). 여기는 사용자가 "내 리스트에 저장"한 것만 다룸
+# (UI 문구도 "담기"가 아니라 "내 리스트에 저장" — 명세서 2.③ 참고). 새 basket_item 테이블.
 
 
-@router.get("/recommendations", response_model=BasketRecommendationOut)
-def get_recommendations(
+@router.get("", response_model=list[BasketItemOut])
+def list_basket_items(
     profile_id: uuid.UUID = Depends(get_current_profile_id),
     db: Session = Depends(get_db),
 ):
-    """Android BasketScreen과 동일한 규칙: 부족한 축이 있으면 그것만, 없으면 4축 전부 보여줌."""
-    summary = analyze_deficiency(get_recent_meal_logs(db, profile_id))
-    active_keys = summary.deficient_keys or ALL_KEYS
+    return (
+        db.query(BasketItem)
+        .options(joinedload(BasketItem.ingredient))
+        .filter(BasketItem.profile_id == profile_id)
+        .order_by(BasketItem.id)
+        .all()
+    )
 
-    groups: list[RecommendationGroupOut] = []
-    for key in active_keys:
-        ingredients = db.query(Ingredient).filter(Ingredient.key_nutrient == key).all()
-        primary = next((i for i in ingredients if i.is_primary), None)
-        subs = [i for i in ingredients if not i.is_primary]
-        groups.append(
-            RecommendationGroupOut(
-                key_nutrient=key,
-                is_deficient=key in summary.deficient_keys,
-                primary=primary,
-                subs=subs,
-            )
-        )
 
-    return BasketRecommendationOut(groups=groups)
+@router.post("/items", response_model=BasketItemOut)
+def add_basket_item(
+    body: BasketItemIn,
+    profile_id: uuid.UUID = Depends(get_current_profile_id),
+    db: Session = Depends(get_db),
+):
+    ingredient = db.get(Ingredient, body.ingredient_id)
+    if ingredient is None:
+        raise HTTPException(status_code=404, detail="해당 ingredient_id가 없습니다.")
+
+    item = BasketItem(
+        profile_id=profile_id,
+        ingredient_id=body.ingredient_id,
+        quantity=body.quantity,
+        reason=body.reason,
+    )
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@router.patch("/items/{item_id}", response_model=BasketItemOut)
+def update_basket_item(
+    item_id: int,
+    body: BasketItemUpdate,
+    profile_id: uuid.UUID = Depends(get_current_profile_id),
+    db: Session = Depends(get_db),
+):
+    item = db.get(BasketItem, item_id)
+    if item is None or item.profile_id != profile_id:
+        raise HTTPException(status_code=404, detail="장바구니 항목이 없습니다.")
+    item.quantity = body.quantity
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@router.delete("/items/{item_id}")
+def delete_basket_item(
+    item_id: int,
+    profile_id: uuid.UUID = Depends(get_current_profile_id),
+    db: Session = Depends(get_db),
+):
+    item = db.get(BasketItem, item_id)
+    if item is None or item.profile_id != profile_id:
+        raise HTTPException(status_code=404, detail="장바구니 항목이 없습니다.")
+    db.delete(item)
+    db.commit()
+    return None
+
+
+@router.delete("/items")
+def clear_basket(
+    profile_id: uuid.UUID = Depends(get_current_profile_id),
+    db: Session = Depends(get_db),
+):
+    """전체 비우기 (API 명세서 v2)."""
+    db.query(BasketItem).filter(BasketItem.profile_id == profile_id).delete()
+    db.commit()
+    return None

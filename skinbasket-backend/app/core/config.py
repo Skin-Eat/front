@@ -13,12 +13,14 @@ class Settings(BaseSettings):
     # 배포 환경에서는 반드시 production으로 설정해서 그 폴백이 막히게 할 것 (app/core/security.py 참고).
     app_env: str = "local"
 
-    # 가비아 DB호스팅(MySQL) 기준. 인증은 DB와 무관하게 계속 Supabase Auth를 쓴다 —
-    # supabase_url/supabase_jwt_secret은 JWT 검증용이지 이 DB 연결과는 별개.
-    database_url: str = "mysql+pymysql://root:password@localhost:3306/skinbasket"
+    # Supabase Postgres 기준. Vercel(프론트) -> 가비아(FastAPI 백엔드 호스팅) -> Supabase(DB) 구조.
+    database_url: str = "postgresql://postgres:password@localhost:5432/postgres"
 
     supabase_url: str = ""
     supabase_jwt_secret: str = ""
+    # anon(공개) 키 — /auth/signup, /auth/login이 서버사이드에서 Supabase Auth API를 대신
+    # 호출할 때 apikey 헤더로 씀. service_role 키가 아니라 anon 키(공개돼도 되는 키)로 충분함.
+    supabase_anon_key: str = ""
 
     openai_api_key: str = ""
 
