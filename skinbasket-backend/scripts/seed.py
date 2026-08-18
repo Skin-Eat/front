@@ -88,6 +88,22 @@ FOODS = [
     # ── 유제품 ──
     Food(name="플레인 요거트(무가당)", source=FoodSource.MFDS, serving_g=200, energy_kcal=130.00, carb_g=12.00, sugar_g=11.00, protein_g=9.00, fat_g=5.00, sat_fat_g=3.20, omega3_mg=40.00, vit_a_ug=55.00, vit_c_mg=1.00, vit_e_mg=0.20, zinc_mg=1.20, is_dairy=True, is_high_gi=False),
     Food(name="우유(200ml)", source=FoodSource.MFDS, serving_g=200, energy_kcal=130.00, carb_g=9.60, sugar_g=9.00, protein_g=6.60, fat_g=6.80, sat_fat_g=4.40, omega3_mg=30.00, vit_a_ug=68.00, vit_c_mg=2.00, vit_e_mg=0.20, zinc_mg=0.80, is_dairy=True, is_high_gi=False),
+    # ── 안드로이드 로컬 FoodSeedData.kt에만 있고 위 목록엔 없던 항목 (2026-08-19 추가) ──
+    # 김치찌개/라면/떡볶이는 이름이 이미 위에 있어 제외. 영양정보는 FoodSeedData.kt의
+    # 추정치를 그대로 옮김(그 파일 주석에도 "Placeholder... not sourced from real MFDS DB").
+    Food(name="마라탕", source=FoodSource.MFDS, serving_g=600, energy_kcal=650.00, carb_g=40.00, sugar_g=6.00, protein_g=25.00, fat_g=40.00, sat_fat_g=15.00, vit_c_mg=8.00, zinc_mg=2.00),
+    Food(name="치킨", source=FoodSource.MFDS, serving_g=150, energy_kcal=280.00, carb_g=10.00, sugar_g=1.00, protein_g=20.00, fat_g=18.00, sat_fat_g=5.00, zinc_mg=1.20),
+    Food(name="피자", source=FoodSource.MFDS, serving_g=150, energy_kcal=285.00, carb_g=33.00, sugar_g=4.00, protein_g=12.00, fat_g=11.00, sat_fat_g=5.00, vit_c_mg=2.00, zinc_mg=1.50, is_dairy=True, is_high_gi=True),
+    Food(name="햄버거", source=FoodSource.MFDS, serving_g=250, energy_kcal=550.00, carb_g=45.00, sugar_g=9.00, protein_g=25.00, fat_g=30.00, sat_fat_g=11.00, vit_c_mg=3.00, zinc_mg=4.00, is_dairy=True, is_high_gi=True),
+    Food(name="샐러드", source=FoodSource.MFDS, serving_g=250, energy_kcal=150.00, carb_g=12.00, sugar_g=5.00, protein_g=5.00, fat_g=9.00, sat_fat_g=1.50, omega3_mg=200.00, vit_a_ug=300.00, vit_c_mg=25.00, vit_e_mg=2.00, zinc_mg=0.80),
+    Food(name="연어", source=FoodSource.MFDS, serving_g=100, energy_kcal=210.00, carb_g=0.00, sugar_g=0.00, protein_g=22.00, fat_g=13.00, sat_fat_g=2.50, omega3_mg=2200.00, vit_a_ug=50.00, vit_e_mg=1.10, zinc_mg=0.50),
+    Food(name="고등어", source=FoodSource.MFDS, serving_g=100, energy_kcal=205.00, carb_g=0.00, sugar_g=0.00, protein_g=20.00, fat_g=14.00, sat_fat_g=3.50, omega3_mg=2600.00, vit_a_ug=40.00, vit_e_mg=1.50, zinc_mg=0.70),
+    Food(name="브로콜리", source=FoodSource.MFDS, serving_g=100, energy_kcal=34.00, carb_g=7.00, sugar_g=1.70, protein_g=2.80, fat_g=0.40, sat_fat_g=0.10, vit_a_ug=31.00, vit_c_mg=89.00, vit_e_mg=0.80, zinc_mg=0.40),
+    Food(name="아몬드", source=FoodSource.MFDS, serving_g=28, energy_kcal=164.00, carb_g=6.00, sugar_g=1.20, protein_g=6.00, fat_g=14.00, sat_fat_g=1.10, vit_e_mg=7.30, zinc_mg=0.90),
+    Food(name="키위", source=FoodSource.MFDS, serving_g=76, energy_kcal=42.00, carb_g=10.00, sugar_g=6.00, protein_g=0.80, fat_g=0.40, vit_a_ug=4.00, vit_c_mg=71.00, vit_e_mg=1.00, zinc_mg=0.10),
+    Food(name="토마토", source=FoodSource.MFDS, serving_g=123, energy_kcal=22.00, carb_g=4.80, sugar_g=3.20, protein_g=1.10, fat_g=0.20, vit_a_ug=42.00, vit_c_mg=17.00, vit_e_mg=0.50, zinc_mg=0.20),
+    Food(name="아보카도 연어 샐러드", source=FoodSource.MFDS, serving_g=300, energy_kcal=320.00, carb_g=12.00, sugar_g=3.00, protein_g=20.00, fat_g=22.00, sat_fat_g=3.00, omega3_mg=1200.00, vit_a_ug=60.00, vit_c_mg=20.00, vit_e_mg=3.00, zinc_mg=0.90),
+    Food(name="그릭 요거트와 블루베리", source=FoodSource.MFDS, serving_g=200, energy_kcal=180.00, carb_g=20.00, sugar_g=14.00, protein_g=12.00, fat_g=5.00, sat_fat_g=3.00, vit_a_ug=10.00, vit_c_mg=8.00, vit_e_mg=0.30, zinc_mg=0.80, is_dairy=True),
 ]
 
 INGREDIENTS = [

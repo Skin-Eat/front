@@ -33,14 +33,16 @@ from app.services.skin_score import analyze_deficiency
 # 그 마이그레이션(경로+응답 shape+프론트 코드) 하기 전까지는 지금 계약을 그대로 유지한다.
 router = APIRouter(prefix="/ai", tags=["ai"])
 
-MAX_CANDIDATES = 50
+MAX_CANDIDATES = 100
 
 
 @router.post("/food-image", response_model=FoodImageAnalysisResponse)
 async def analyze_food_image(image: UploadFile, db: Session = Depends(get_db)):
     """AI 역할 ①: 사진 -> 음식 인식. 절대 규칙: 자유 인식이 아니라 food 테이블
-    후보 목록(최대 50종) 중에서만 고르게 한다."""
-    candidate_names = db.scalars(select(Food.name).limit(MAX_CANDIDATES)).all()
+    후보 목록(최대 100종) 중에서만 고르게 한다.
+    id 기준 정렬 없이 limit만 걸면 food 테이블이 늘어날 때 어떤 항목이 후보에서
+    잘릴지 매번 달라져서(비결정적) 디버깅이 어렵다 — order_by로 고정."""
+    candidate_names = db.scalars(select(Food.name).order_by(Food.id).limit(MAX_CANDIDATES)).all()
     if not candidate_names:
         raise HTTPException(status_code=500, detail="food 테이블이 비어있어 후보를 만들 수 없습니다.")
 

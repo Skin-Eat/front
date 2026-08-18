@@ -16,7 +16,7 @@ from app.services.openai_client import FoodRecognitionError, recognize_food
 
 router = APIRouter(prefix="/meals", tags=["meals"], route_class=EnvelopeRoute)
 
-_ANALYZE_PHOTO_MAX_CANDIDATES = 50
+_ANALYZE_PHOTO_MAX_CANDIDATES = 100
 
 
 def _validate_food_ids(db: Session, food_ids: list[int]) -> None:
@@ -46,7 +46,7 @@ async def analyze_photo(image: UploadFile, db: Session = Depends(get_db)):
     2. 인식 실패를 502로 던지지 않고 success:true + aiFailed:true로 표현
        (명세서 0번 공통 규약: "AI 인식 실패" 같은 정상 상태는 에러가 아니라 플래그로)
     저장은 안 함(사진 인식만) — 실제 기록은 이 결과를 담아 POST /meals로 별도 호출."""
-    candidate_names = db.scalars(select(Food.name).limit(_ANALYZE_PHOTO_MAX_CANDIDATES)).all()
+    candidate_names = db.scalars(select(Food.name).order_by(Food.id).limit(_ANALYZE_PHOTO_MAX_CANDIDATES)).all()
     if not candidate_names:
         return AnalyzePhotoResponse(detected=[], ai_failed=True)
 
