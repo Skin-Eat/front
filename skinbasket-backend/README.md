@@ -34,11 +34,12 @@ deploy/       가비아 g클라우드 배포용 systemd/nginx 설정 + 체크리
 
 | 도메인 | 상태 |
 |---|---|
-| 인증 (`POST /auth/signup`, `POST /auth/login`, `/users/me*`) | API 명세서 v2 반영: 프론트는 Supabase를 모르고 우리 API만 씀. 백엔드가 Supabase Auth를 서버사이드에서 대신 호출(`services/supabase_auth.py`)하고 그 accessToken을 그대로 돌려줌 — JWT 검증(`security.py`)은 안 바뀜. `profiles.photo_consent` 컬럼 추가함. **DRAFT: Supabase 프로젝트의 이메일 확인(Confirm email)이 켜져 있으면 회원가입 응답에 accessToken이 없어서 실패함 — 대시보드에서 꺼야 함** |
-| 식사 기록 (`/meals`) | 등록 + 오늘/최근7일 조회 동작 |
-| 분석 (`/analysis/deficiency`) | Android `SkinScoreCalculator.analyzeDeficiency`와 임계값 동일하게 이식, 최근 7일만, 저장 안 함 |
-| 추천 (`/basket/recommendations`) | 부족 축 기반 주재료+보충옵션 반환 |
-| 레시피 (`/recipes/{id}`, `POST /recipes/{id}/eat`) | eat는 폐쇄 루프의 핵심 — 레시피 재료명(`ingredients[].name`)을 food 테이블과 이름 매칭해 자동으로 식사 기록을 만듦 (매칭 방식은 추후 ID 매핑으로 교체 권장). `user_id`/`generated_by` 컬럼 추가함(AI 생성 레시피 저장용, 아직 저장 로직은 안 붙임). **recipe 15종 시드 데이터는 AI 담당자 SQL에 `cooking_time_minutes`/`servings`/`skin_benefits`가 없어서 아직 미반영 — 값 받으면 `scripts/seed.py`에 추가할 것** |
+| 인증 (`POST /auth/signup`, `POST /auth/login`, `/users/me*`) | API 명세서 v2 반영: 프론트는 Supabase를 모르고 우리 API만 씀. 백엔드가 Supabase Auth를 서버사이드에서 대신 호출(`services/supabase_auth.py`)하고 그 accessToken을 그대로 돌려줌. **실제 회원가입~로그인~`/meals` 등록~`/analysis/diet` 반영까지 실기기로 전 과정 검증 완료.** 이 과정에서 이 Supabase 프로젝트가 레거시 HS256이 아니라 **비대칭키(ES256)로 토큰을 발급한다는 걸 확인**해서 `security.py`를 JWKS(`/auth/v1/.well-known/jwks.json`) 검증 방식으로 다시 짬 (alg를 보고 HS256/그외 자동 분기, 둘 다 지원). Supabase 프로젝트의 이메일 확인(Confirm email)은 꺼져 있어야 함(껐음) — 켜져 있으면 가입 응답에 accessToken이 없어서 실패함 |
+| 식사 기록 (`/meals`) | 등록(끼니당 여러 항목)/조회(`from`,`to`)/수정/삭제, `POST /meals/analyze-photo` |
+| 분석 (`/analysis/diet`) | Android `SkinScoreCalculator`(결핍 분석 + 점수 계산 둘 다) 이식, 최근 7일(가변) 기준, 저장 안 함 |
+| 추천 (`/recommendations/ingredients`) | 부족 축 기반 주재료+보충옵션 반환 (최대 3그룹, subs 최대 3) |
+| 장보기 (`/basket`, `/basket/items`) | 새 `basket_item` 테이블로 영속화 |
+| 레시피 (`/recipes`, `/recipes/{id}`, `POST /recipes/generate`, `POST /recipes/{id}/eat`) | generate는 DB 큐레이션 레시피 매칭(AI 생성 아님). eat는 폐쇄 루프의 핵심 — 레시피 재료명(`ingredients[].name`)을 food 테이블과 이름 매칭해 자동으로 식사 기록을 만듦 (매칭 방식은 추후 ID 매핑으로 교체 권장). **recipe 15종 시드 데이터는 AI 담당자 SQL에 `cooking_time_minutes`/`servings`/`skin_benefits`가 없어서 아직 미반영 — 값 받으면 `scripts/seed.py`에 추가할 것, 그때까지 recipe 테이블은 비어있음** |
 | 피부 기록 (`/skin-logs`) | 등록/조회 동작. 사진은 URL만 받음(Supabase Storage에 프론트가 직접 업로드한다는 전제) |
 | 쇼핑 검색 | **백엔드에 없음.** 네이버 쇼핑검색 오픈API(`/v1/search/shop.json`)가 2026-07-31부로 완전 종료되고 공식 대체 API가 없음을 확인함. 쿠팡/컬리와 동일한 원칙(구매자용 쓰기 API 없음 → 프론트 딥링크)을 그대로 적용 — 프론트가 `https://msearch.shopping.naver.com/search/all?query=...` 같은 검색 결과 페이지를 여는 방식으로 처리 |
 | AI 사진 인식 (`POST /ai/food-image`) | OpenAI(`gpt-4.1-mini`, 비전) 호출, food 테이블에서 뽑은 후보 안에서만 고르게 프롬프트 강제. `OPENAI_API_KEY` 없으면 502. 모델·프롬프트는 AI 담당자가 실제 사진 24장으로 검증한 결과(23/24=95.8%, `Skin-Eat/ai` 레포 참고)를 반영함 — `gpt-4o-mini`는 저티어 계정 일일 한도(RPD)에 걸려서 `gpt-4.1-mini`로 교체 |
@@ -75,9 +76,6 @@ deploy/       가비아 g클라우드 배포용 systemd/nginx 설정 + 체크리
 - `/ai/recipe-suggestion`, `/ai/analysis-comment`(DRAFT) — 명세서에 없는 엔드포인트. AI 3역할 중 ②③으로 만들어뒀던 것들인데 ④ 요리는 DB 매칭으로 확정됐으니, 이 두 개도 계속 쓸지(다른 화면용?) 아니면 정리할지 팀 확인 필요
 - `/meals`, `PATCH /users/me` 등은 명세서에 없던 유효성 검증(portionRatio 0~10, level 1~5 등)을 Pydantic `Field`로 추가함 — 서버가 400으로 막아주는 항목이라 프론트에서 별도로 안 막아도 됨
 - `recipe` 테이블이 아직 비어있어서(15종 시드 데이터 값 대기 중, 위 레시피 항목 참고) `GET /recipes`, `POST /recipes/generate`가 실제로는 항상 빈 목록/404를 반환함 — 시드 채워지면 바로 동작
-
-**AI 관련 (스코프 재확인 필요):**
-- `/ai/recipe-suggestion`(부족 영양소 기반 즉석 생성, DRAFT)과 `/ai/analysis-comment`는 명세서에 없는 엔드포인트 — AI 3역할 중 ②③으로 만들어뒀던 것들인데, ④ 요리는 이제 DB 매칭으로 확정됐으니 이 두 개도 계속 쓸지(다른 화면용?) 팀과 확인 필요. 안 쓰면 정리 대상.
 
 ### 쇼핑 연동의 확장 가능성 (발표용 근거)
 
