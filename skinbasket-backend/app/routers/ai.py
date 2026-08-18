@@ -10,7 +10,7 @@ from app.db.session import get_db
 from app.models.food import Food
 from app.models.profile import ConstraintType, Profile
 from app.schemas.ai import AIRecipeSuggestionOut, AnalysisCommentResponse, FoodImageAnalysisResponse
-from app.services.gemini_client import (
+from app.services.openai_client import (
     AnalysisCommentError,
     FoodRecognitionError,
     RecipeGenerationError,
@@ -50,7 +50,7 @@ async def analyze_food_image(image: UploadFile, db: Session = Depends(get_db)):
 
 # ── 아래 두 엔드포인트는 DRAFT (틀만 잡아둔 상태) ────────────────────────────
 # API 명세/DB가 아직 안 굳어서 경로/응답 shape가 바뀔 수 있음. 프론트가 실제로 쓰기 전에
-# 팀과 맞출 것. 로직 자체는 동작한다(GEMINI_API_KEY만 있으면 바로 호출 가능).
+# 팀과 맞출 것. 로직 자체는 동작한다(OPENAI_API_KEY만 있으면 바로 호출 가능).
 
 
 @router.post("/analysis-comment", response_model=AnalysisCommentResponse)
@@ -75,7 +75,7 @@ async def get_recipe_suggestion(
 ):
     """AI 역할 ③의 틀: recipe 테이블의 고정 레시피 대신, 프로필의 부족 영양소/제약을
     반영해 즉석 레시피를 생성한다. DRAFT — 저장 여부/food 테이블 매칭은
-    services/gemini_client.py의 generate_recipe_suggestion docstring 참고."""
+    services/openai_client.py의 generate_recipe_suggestion docstring 참고."""
     profile = db.get(Profile, profile_id)
     if profile is None:
         raise HTTPException(status_code=404, detail="프로필이 없습니다. 온보딩을 먼저 완료하세요.")
@@ -92,4 +92,4 @@ async def get_recipe_suggestion(
     try:
         return AIRecipeSuggestionOut(**recipe)
     except ValidationError as exc:
-        raise HTTPException(status_code=502, detail="Gemini가 예상한 형식으로 응답하지 않았습니다.") from exc
+        raise HTTPException(status_code=502, detail="OpenAI가 예상한 형식으로 응답하지 않았습니다.") from exc

@@ -5,7 +5,7 @@ from app.core.config import get_settings
 
 settings = get_settings()
 
-# pool_pre_ping: Supabase가 유휴 커넥션을 끊는 경우가 있어 죽은 커넥션을 자동으로 걸러줌
+# pool_pre_ping: 관리형 DB(가비아 DB호스팅 등)가 유휴 커넥션을 끊는 경우가 있어 죽은 커넥션을 자동으로 걸러줌
 engine = create_engine(settings.database_url, pool_pre_ping=True)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

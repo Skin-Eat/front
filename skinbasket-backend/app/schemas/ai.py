@@ -1,5 +1,7 @@
 from pydantic import BaseModel
 
+from app.schemas.recipe import RecipeIngredientOut
+
 
 class FoodImageAnalysisResponse(BaseModel):
     """Android FoodImageAnalysisResponse.kt와 정확히 동일한 shape를 유지할 것."""
@@ -21,6 +23,6 @@ class AIRecipeSuggestionOut(BaseModel):
     name: str
     cooking_time_minutes: int
     servings: str
-    ingredients: list[str]
+    ingredients: list[RecipeIngredientOut]
     steps: list[str]
     skin_benefits: list[dict]

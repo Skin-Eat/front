@@ -1,0 +1,52 @@
+# nginx 리버스 프록시 템플릿 — uvicorn(127.0.0.1:8000)을 외부에 HTTPS로 노출한다.
+# 안드로이드는 기본적으로 평문(HTTP) 통신을 차단하므로, 이 nginx가 TLS를 종료해줘야
+# 앱이 실제로 서버에 접속할 수 있다. localhost/에뮬레이터(10.0.2.2)를 벗어나는 순간부터
+# 이 문제가 생긴다는 점을 꼭 기억할 것.
+#
+# 설치 순서:
+#   1) YOUR_DOMAIN 을 실제 도메인으로 바꿔서 저장
+#   2) sudo apt install nginx certbot python3-certbot-nginx   (Ubuntu 기준)
+#   3) sudo cp deploy/nginx.conf.template /etc/nginx/sites-available/skinbasket-backend
+#   4) sudo ln -s /etc/nginx/sites-available/skinbasket-backend /etc/nginx/sites-enabled/
+#   5) sudo nginx -t && sudo systemctl reload nginx
+#   6) sudo certbot --nginx -d YOUR_DOMAIN
+#      -> certbot이 인증서 발급 + 아래 80 -> 443 리다이렉트/ssl_certificate 설정을 자동으로 덧붙여줌
+#   7) 가비아 클라우드 콘솔에서 방화벽(보안 그룹)에 80, 443 인바운드 허용
+
+server {
+    listen 80;
+    server_name YOUR_DOMAIN;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # AI 이미지 업로드(POST /ai/food-image)가 사진 파일을 받으므로 기본 1m보다 넉넉하게
+        client_max_body_size 10m;
+        proxy_read_timeout 30s;
+    }
+}
+
+# certbot이 실행되면 위 server 블록 아래에 443/ssl 관련 설정을 자동으로 추가한다.
+# 수동으로 하고 싶다면 아래 주석을 해제하고 인증서 경로를 채울 것.
+#
+# server {
+#     listen 443 ssl;
+#     server_name YOUR_DOMAIN;
+#
+#     ssl_certificate     /etc/letsencrypt/live/YOUR_DOMAIN/fullchain.pem;
+#     ssl_certificate_key /etc/letsencrypt/live/YOUR_DOMAIN/privkey.pem;
+#
+#     location / {
+#         proxy_pass http://127.0.0.1:8000;
+#         proxy_set_header Host $host;
+#         proxy_set_header X-Real-IP $remote_addr;
+#         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+#         proxy_set_header X-Forwarded-Proto $scheme;
+#         client_max_body_size 10m;
+#         proxy_read_timeout 30s;
+#     }
+# }

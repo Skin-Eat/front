@@ -2,8 +2,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String, func
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import JSON, DateTime, Enum, ForeignKey, String, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -30,10 +29,10 @@ class Profile(Base):
 
     __tablename__ = "profiles"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
     nickname: Mapped[str] = mapped_column(String(50))
     skin_type: Mapped[SkinType | None] = mapped_column(Enum(SkinType, name="skin_type"), nullable=True)
-    concerns: Mapped[list[str]] = mapped_column(JSONB, default=list)
+    concerns: Mapped[list[str]] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     constraints: Mapped[list["UserConstraint"]] = relationship(back_populates="profile", cascade="all, delete-orphan")

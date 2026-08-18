@@ -1,0 +1,37 @@
+# systemd 서비스 유닛 — 가비아 g클라우드 VM(Linux)에 배포할 때 사용.
+# `uvicorn --reload`를 터미널에 띄워두는 방식은 SSH 세션이 끊기면 같이 죽으므로
+# 상시 구동 + 크래시 시 자동 재시작을 위해 systemd로 관리한다.
+#
+# 설치:
+#   1) 아래 User/WorkingDirectory/ExecStart의 경로를 실제 배포 경로로 바꿀 것
+#      (예시는 /home/skinbasket/skinbasket-backend 기준)
+#   2) sudo cp deploy/skinbasket-backend.service /etc/systemd/system/
+#   3) sudo systemctl daemon-reload
+#   4) sudo systemctl enable --now skinbasket-backend
+#   5) 상태 확인: sudo systemctl status skinbasket-backend
+#   6) 로그 확인: sudo journalctl -u skinbasket-backend -f
+#
+# --host 127.0.0.1로 로컬에만 열어둔 것에 주의 — 외부 노출은 앞단 nginx가 담당한다
+# (deploy/nginx.conf.template 참고). uvicorn을 0.0.0.0으로 바로 열면 nginx의
+# HTTPS/리버스프록시 없이 평문 8000 포트가 그대로 인터넷에 노출된다.
+
+[Unit]
+Description=Skin Basket FastAPI backend
+After=network.target
+
+[Service]
+Type=simple
+User=skinbasket
+Group=skinbasket
+WorkingDirectory=/home/skinbasket/skinbasket-backend
+ExecStart=/home/skinbasket/skinbasket-backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 2
+Restart=on-failure
+RestartSec=5
+
+# .env 파일(DATABASE_URL/SUPABASE_JWT_SECRET/OPENAI_API_KEY 등)은 서버에만 두고
+# 이 서비스 파일은 git에 올라가도 안전하도록 실제 시크릿을 담지 않는다.
+# app/core/config.py가 WorkingDirectory 기준 .env를 알아서 읽으므로 별도
+# EnvironmentFile 지정은 필요 없음.
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,106 @@
+# 배포 체크리스트 (가비아 g클라우드)
+
+이 문서에 있는 콘솔 조작/도메인 연결/SSH 접속은 여기서 대신 실행할 수 없는 작업이라
+직접 진행해야 한다. `deploy/skinbasket-backend.service`, `deploy/nginx.conf.template`은
+그 과정에서 그대로 복사해 쓸 파일.
+
+## 0. 전제
+
+- DB는 이미 가비아 DB호스팅(MySQL)에 떠 있고 `.env`의 `DATABASE_URL`이 로컬에서 검증됐다고 가정.
+  (아직이면 이 문서보다 로컬 `alembic upgrade head` + `python scripts/seed.py`가 먼저.)
+- 이 배포는 "가비아 클라우드(g클라우드)" — DB호스팅과는 다른 별도 상품. 가상서버(VM)를
+  새로 만들어야 한다.
+
+## 1. VM 준비
+
+1. 가비아 클라우드 콘솔에서 g클라우드 서버 생성 (Ubuntu 22.04 LTS 권장, 최소 사양이면 충분 — 해커톤 트래픽 규모)
+2. 방화벽(보안 그룹)에서 SSH(22), HTTP(80), HTTPS(443) 인바운드 허용
+3. SSH 접속 후 기본 패키지 설치:
+   ```bash
+   sudo apt update
+   sudo apt install -y python3-venv python3-pip git nginx certbot python3-certbot-nginx
+   ```
+4. 배포 전용 유저 생성 (root로 직접 돌리지 않기 위함):
+   ```bash
+   sudo useradd -m -s /bin/bash skinbasket
+   sudo su - skinbasket
+   ```
+
+## 2. 코드 배포
+
+```bash
+git clone https://github.com/Skin-Eat/front.git
+cd front/skinbasket-backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+nano .env   # DATABASE_URL(가비아 MySQL), SUPABASE_URL/SUPABASE_JWT_SECRET, OPENAI_API_KEY,
+            # APP_ENV=production 채우기
+```
+
+**`APP_ENV=production`으로 바꾸는 걸 잊지 말 것** — `local`로 두면 `SUPABASE_JWT_SECRET`이
+비어 있을 때 인증이 뚫리는 개발용 폴백이 배포 환경에서도 그대로 켜진다 (`app/core/security.py`).
+
+```bash
+alembic upgrade head
+python scripts/seed.py
+deactivate
+```
+
+## 3. systemd로 상시 구동
+
+```bash
+exit   # skinbasket 유저에서 나와서 sudo 권한 있는 계정으로
+sudo cp /home/skinbasket/front/skinbasket-backend/deploy/skinbasket-backend.service /etc/systemd/system/
+# 유닛 파일 안의 경로가 실제 clone 위치(.../front/skinbasket-backend)와 다르면 맞춰서 수정
+sudo systemctl daemon-reload
+sudo systemctl enable --now skinbasket-backend
+sudo systemctl status skinbasket-backend   # active (running) 확인
+```
+
+## 4. nginx + HTTPS
+
+도메인이 있어야 certbot으로 인증서를 받을 수 있다 (가비아에서 도메인 구매했거나 이미
+있는 도메인의 서브도메인을 이 서버 IP로 A 레코드 연결).
+
+```bash
+sudo cp /home/skinbasket/front/skinbasket-backend/deploy/nginx.conf.template /etc/nginx/sites-available/skinbasket-backend
+sudo sed -i 's/YOUR_DOMAIN/실제도메인/' /etc/nginx/sites-available/skinbasket-backend
+sudo ln -s /etc/nginx/sites-available/skinbasket-backend /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+sudo certbot --nginx -d 실제도메인
+```
+
+도메인을 아직 못 구했다면 임시로 IP + HTTP로 붙일 수도 있지만, 안드로이드가 기본적으로
+평문 트래픽을 막기 때문에 앱에서 `usesCleartextTraffic` 예외를 걸어야 한다 (데모용 임시
+방편으로만 — 정식으로는 도메인+HTTPS 권장).
+
+## 5. 검증
+
+```bash
+curl https://실제도메인/health
+```
+로컬이 아니라 **외부에서** (핸드폰 데이터망 등) 위 요청과 `/docs` 접속이 되는지 확인할 것 —
+방화벽/보안그룹에서 막혀 있으면 서버 안에서는 되는데 밖에서는 안 되는 경우가 흔하다.
+
+## 6. 프론트에 전달할 것
+
+- `https://실제도메인` (또는 그 API prefix) — 안드로이드 `NetworkModule.BASE_URL`을 이걸로 교체
+- Supabase 프로젝트 URL + **anon(공개) 키** — 프론트가 Supabase Auth SDK로 로그인할 때 필요.
+  (`SUPABASE_JWT_SECRET`, `OPENAI_API_KEY`, `DATABASE_URL`은 서버 `.env`에만
+  두고 절대 앱/프론트 저장소에 넣지 말 것 — 앱은 디컴파일되면 그 안의 문자열이 그대로 노출된다.)
+
+## 7. 배포 후 갱신할 때
+
+```bash
+sudo su - skinbasket
+cd front/skinbasket-backend
+git pull
+source .venv/bin/activate
+pip install -r requirements.txt   # 의존성 바뀌었을 때만
+alembic upgrade head              # 마이그레이션 추가됐을 때만
+deactivate
+exit
+sudo systemctl restart skinbasket-backend
+```
