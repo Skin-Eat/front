@@ -9,9 +9,14 @@ from app.db.base import Base
 
 
 class SkinType(str, enum.Enum):
+    # Android SkinType.kt와 값 맞춤 — 원래 3개(OILY/DRY/COMBINATION)만 있었는데 안드로이드는
+    # NORMAL/COMBINATION_OILY까지 5개를 씀. 온보딩에서 그 값 그대로 넘어오면 검증에서
+    # 튕겨나가서 여기도 5개로 맞춤 (분석 로직은 skin_type을 안 쓰므로 값 늘려도 안전함).
     OILY = "OILY"
     DRY = "DRY"
+    NORMAL = "NORMAL"
     COMBINATION = "COMBINATION"
+    COMBINATION_OILY = "COMBINATION_OILY"
 
 
 class ConstraintType(str, enum.Enum):
